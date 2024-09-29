@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "org.smirkhat.pocasi",
+        "sha256_cert_fingerprints": ["21:AF:B7:D1:C0:99:96:9F:EB:69:8C:7B:41:D4:12:80:C4:44:8B:BF:D6:D2:02:9B:B9:39:F1:D6:EB:D8:59:B9"]
+      }
+    }]

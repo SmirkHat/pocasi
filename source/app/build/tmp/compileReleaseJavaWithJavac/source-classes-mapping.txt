@@ -1,0 +1,8 @@
+org/smirkhat/pocasi/LauncherActivity.java
+ org.smirkhat.pocasi.LauncherActivity
+org/smirkhat/pocasi/BuildConfig.java
+ org.smirkhat.pocasi.BuildConfig
+org/smirkhat/pocasi/DelegationService.java
+ org.smirkhat.pocasi.DelegationService
+org/smirkhat/pocasi/Application.java
+ org.smirkhat.pocasi.Application
