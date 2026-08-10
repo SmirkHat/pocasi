@@ -9,6 +9,11 @@ export function normalizeInpocasiStation(data) {
     temperature,
     apparentTemperature: null,
     precipitation: current.precipitation ?? null,
+    precipitationIntervalMinutes: null,
+    observedAt: current.time ?? null,
+    stationName: data?.station?.name ?? null,
+    stationId: data?.station?.id ?? null,
+    distanceKm: data?.station?.distance ?? null,
     dewPoint: calculateDewPoint(temperature, humidity),
     windSpeed: current.windSpeedKmh ?? null,
     windDirection: current.windDirection ?? null,
@@ -20,7 +25,6 @@ export function normalizeInpocasiStation(data) {
     uvIndex: null,
     weatherCode: null,
     attribution: data?.attribution ?? null,
-    stationName: data?.station?.name ?? null,
     raw: data,
   };
 }

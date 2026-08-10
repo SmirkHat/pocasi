@@ -9,6 +9,11 @@ export function normalizeCHMI(data) {
     temperature,
     apparentTemperature: null, // CHMI doesn't provide apparent temp in this 10m feed
     precipitation: current.precipitation,
+    precipitationIntervalMinutes: 10,
+    observedAt: current.time ?? null,
+    stationName: data?.station?.name ?? null,
+    stationId: data?.station?.id ?? data?.station?.wsi ?? null,
+    distanceKm: data?.station?.distance ?? null,
     dewPoint: calculateDewPoint(temperature, humidity),
     windSpeed: current.windSpeed,
     windDirection: current.windDirection,

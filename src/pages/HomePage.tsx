@@ -11,6 +11,7 @@ import { DataUpdateFooter } from '../components/DataUpdateFooter'
 import ForecastExplorer, { ForecastExplorerSkeleton } from '../components/ForecastExplorer'
 import MetricsGrid, { HumidityPrecipTiles, HumidityPrecipTilesSkeleton, MetricsGridSkeleton } from '../components/MetricsGrid'
 import NerdZone from '../components/NerdZone'
+import NowcastBar from '../components/NowcastBar'
 import RadarMap from '../components/RadarMap'
 import VodaPreview from '../components/VodaPreview'
 import WarningBanner from '../components/WarningBanner'
@@ -132,8 +133,9 @@ export default function HomePage() {
           )}
         </section>
 
-        <aside className="anim-rise lg:col-span-4" aria-label="Radar" style={{ animationDelay: '100ms' }}>
+        <aside className="anim-rise flex flex-col gap-4 lg:col-span-4" aria-label="Radar a krátkodobý výhled srážek" style={{ animationDelay: '100ms' }}>
           <RadarPreviewCard location={location} />
+          {consensus.aladin ? <NowcastBar aladin={consensus.aladin} /> : null}
         </aside>
 
         <aside className="anim-rise flex flex-col gap-3 lg:col-span-4" aria-label="Kvalita ovzduší a srážky" style={{ animationDelay: '140ms' }}>
@@ -145,6 +147,7 @@ export default function HomePage() {
               weather={home.weather}
               consensusValues={consensusValues}
               todayPrecipMm={todayForecast?.precipSum}
+              currentRain={consensus?.currentRain}
               fieldSources={fieldSources}
             />
           )}

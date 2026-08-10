@@ -158,12 +158,18 @@ export function HumidityPrecipTiles({
   consensusValues,
   /** Prefer merged hourly-day sum (same series as ForecastExplorer). */
   todayPrecipMm = null,
+  currentRain = null,
   fieldSources = null,
   className = null,
 }: {
   weather?: any
   consensusValues?: any
   todayPrecipMm?: number | null
+  currentRain?: {
+    state?: string
+    observedMm60?: number | null
+    evidence?: Array<{ intervalMinutes?: number | null }>
+  } | null
   fieldSources?: FieldSourcesMap
   className?: string | null
 }) {
@@ -178,6 +184,16 @@ export function HumidityPrecipTiles({
     todayPrecipMm != null && Number.isFinite(Number(todayPrecipMm))
       ? Number(todayPrecipMm)
       : firstDailyValue(daily, 'precipitation_sum');
+  const rainLabel = currentRain?.state === 'raining'
+    ? 'Prší právě teď'
+    : currentRain?.state === 'probably-raining'
+      ? 'Pravděpodobně prší'
+      : currentRain?.state === 'not-raining'
+        ? 'Déšť nezjištěn'
+        : null;
+  const observedDetail = currentRain?.observedMm60 != null
+    ? `${rainLabel ?? 'Pozorování'} · ${formatPrecipitation(currentRain.observedMm60)} / 60 min`
+    : rainLabel;
 
   return (
     <div className={cn('grid grid-cols-2 gap-3', className)}>
@@ -196,7 +212,7 @@ export function HumidityPrecipTiles({
         value={precipitationChance == null ? '—' : Math.round(precipitationChance)}
         unit="%"
         meter={precipitationChance}
-        detail={todayPrecipitation == null ? null : `Dnes ${formatPrecipitation(todayPrecipitation)}`}
+        detail={[observedDetail, todayPrecipitation == null ? null : `Dnes ${formatPrecipitation(todayPrecipitation)}`].filter(Boolean).join(' · ') || null}
         sources={fieldSources?.precipitationProbability}
         formatSourceValue={formatPercentSource}
       />

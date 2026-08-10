@@ -8,7 +8,11 @@ export function normalizeBrightsky(data) {
   return {
     temperature,
     apparentTemperature: null,
-    precipitation: weather.precipitation_60, // 60 min sum
+    precipitation: weather.precipitation_60,
+    precipitationIntervalMinutes: 60,
+    observedAt: weather.timestamp ?? null,
+    stationName: data?.sources?.[0]?.station_name ?? null,
+    distanceKm: data?.sources?.[0]?.distance != null ? Number(data.sources[0].distance) / 1000 : null,
     dewPoint: weather.dew_point ?? calculateDewPoint(temperature, humidity),
     windSpeed: weather.wind_speed_10 ?? null,
     windDirection: weather.wind_direction_10,

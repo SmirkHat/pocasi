@@ -221,6 +221,12 @@ export function publicSource(provider, value, status) {
     dewPoint: enriched.dewPoint,
     wetBulbTemperature: enriched.wetBulbTemperature,
     precipitation: enriched.precipitation,
+    precipitationIntervalMinutes: enriched.precipitationIntervalMinutes ?? null,
+    observedAt: enriched.observedAt ?? null,
+    fetchedAt: enriched.fetchedAt ?? null,
+    stationName: enriched.stationName ?? null,
+    stationId: enriched.stationId ?? null,
+    distanceKm: enriched.distanceKm ?? null,
     windSpeed: enriched.windSpeed,
     windDirection: enriched.windDirection,
     windGust: enriched.windGust,
@@ -242,7 +248,6 @@ export function publicSource(provider, value, status) {
     fogArea: enriched.fogArea,
     sunrise: enriched.sunrise,
     sunset: enriched.sunset,
-    distanceKm: enriched.distanceKm,
     symbolCode: enriched.symbolCode,
     iconName: enriched.iconName,
     tafSummary: enriched.tafSummary || null,
@@ -395,6 +400,12 @@ export function buildResult(settled) {
     .filter((entry) => entry.value !== null);
   weatherCodeEntries.forEach((entry) => includedSourceIds.add(entry.source.id));
   consensus.weatherCode = weightedMode(weatherCodeEntries);
+  const precipitationGroups = buildPrecipitationGroups(sources);
+  const precipitationGroupEntries = Object.values(precipitationGroups as Record<string, { value: number | null }>)
+    .filter((group) => group.value !== null)
+    .map((group) => ({ value: group.value as number, weight: 1 }));
+  consensus.precipitation = weightedAverage(precipitationGroupEntries);
+  const currentRain = buildCurrentRain(sources);
   const divergence = weightedStandardDeviation(entriesByField.get('temperature') || []);
   const includedSources = sources.map((source) => ({
     ...source,
@@ -406,9 +417,12 @@ export function buildResult(settled) {
     [...entriesByField.entries()].map(([field, entries]) => [field, serializeFieldEntries(entries)]),
   );
   fieldSources.weatherCode = serializeFieldEntries(weatherCodeEntries);
+  fieldSources.precipitationGroups = precipitationGroups;
 
   return {
     consensus,
+    currentRain,
+    precipitationGroups,
     sources: includedSources,
     fieldSources,
     divergence,
@@ -421,6 +435,82 @@ export function buildResult(settled) {
   };
 }
 
+const OPEN_METEO_SOURCE_IDS = new Set([
+  'ecmwf_ifs', 'ecmwf_aifs', 'icon_eu', 'icon_d2', 'icon_eu_eps_mean', 'arome', 'arpege',
+  'gfs', 'graphcast', 'gefs025_mean', 'gem', 'gem_geps_mean', 'ecmwf_ifs_eps_mean', 'jma', 'cma',
+]);
+
+function weightedAverage(entries) {
+  let total = 0;
+  let weight = 0;
+  for (const entry of entries) {
+    const entryWeight = Math.max(0, Number(entry.weight) || 0);
+    total += entry.value * entryWeight;
+    weight += entryWeight;
+  }
+  return weight > 0 ? total / weight : null;
+}
+
+export function buildPrecipitationGroups(sources) {
+  const forecastSources = sources.filter((source) => source.status === 'ok' && !OBSERVATION_SOURCE_IDS.has(source.id));
+  const groups = [
+    ['openMeteo', forecastSources.filter((source) => OPEN_METEO_SOURCE_IDS.has(source.id))],
+    ['otherForecast', forecastSources.filter((source) => !OPEN_METEO_SOURCE_IDS.has(source.id))],
+  ];
+  return Object.fromEntries(groups.map(([id, groupSources]) => {
+    const entries = groupSources.flatMap((source) => {
+      const value = numberOrNull(source.precipitation);
+      return value === null ? [] : [{ source, value, weight: sourceWeight(source) }];
+    });
+    return [id, {
+      value: weightedAverage(entries),
+      sourceIds: entries.map((entry) => entry.source.id),
+      sources: serializeFieldEntries(entries),
+    }];
+  }));
+}
+
+export function buildCurrentRain(sources) {
+  const now = Date.now();
+  const observations = sources.filter((source) => OBSERVATION_SOURCE_IDS.has(source.id) && source.status === 'ok');
+  const evidence = observations.flatMap((source) => {
+    const value = numberOrNull(source.precipitation);
+    const observedAt = source.observedAt ? Date.parse(source.observedAt) : NaN;
+    const ageMinutes = Number.isFinite(observedAt) ? Math.max(0, (now - observedAt) / 60000) : null;
+    const maxAge = source.id === 'chmi' ? 30 : 120;
+    if (value === null || ageMinutes === null || ageMinutes > maxAge) return [];
+    return [{
+      sourceId: source.id,
+      sourceName: source.name,
+      value,
+      intervalMinutes: source.precipitationIntervalMinutes ?? null,
+      observedAt: source.observedAt,
+      distanceKm: source.distanceKm ?? null,
+      ageMinutes: Math.round(ageMinutes),
+      weight: source.id === 'chmi' ? 1 : 0.6,
+    }];
+  });
+  const positive = evidence.filter((entry) => entry.value > 0);
+  const observedMm60 = positive.length
+    ? weightedAverage(positive.map((entry) => ({
+        value: entry.intervalMinutes ? entry.value * (60 / entry.intervalMinutes) : entry.value,
+        weight: entry.weight,
+      })))
+    : null;
+  let state = 'unknown';
+  if (positive.some((entry) => entry.sourceId === 'chmi')) state = 'raining';
+  else if (positive.length >= 2) state = 'raining';
+  else if (positive.length === 1) state = 'probably-raining';
+  else if (evidence.length >= 2) state = 'not-raining';
+  return {
+    state,
+    confidence: positive.length >= 2 ? 0.9 : positive.length === 1 ? 0.65 : evidence.length >= 2 ? 0.7 : 0.25,
+    observedMm60,
+    evidence,
+    updatedAt: evidence.length ? evidence.map((entry) => entry.observedAt).sort().at(-1) : null,
+  };
+}
+
 function serializeFieldEntries(entries) {
   return entries.map(({ source, value, weight }) => ({
     id: source.id,
@@ -428,6 +518,10 @@ function serializeFieldEntries(entries) {
     url: source.url || null,
     value,
     weight,
+    precipitationIntervalMinutes: source.precipitationIntervalMinutes ?? null,
+    observedAt: source.observedAt ?? null,
+    fetchedAt: source.fetchedAt ?? null,
+    distanceKm: source.distanceKm ?? null,
   }));
 }
 

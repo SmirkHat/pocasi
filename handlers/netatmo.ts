@@ -67,14 +67,21 @@ function parseStation(station, lat, lon) {
   let time = null;
 
   const measures = station.measures || {};
-  for (const measure of Object.values(measures)) {
+  let latestStamp = -Infinity;
+  for (const measure of Object.values(measures) as Array<Record<string, any>>) {
     const type = measure.type || [];
-    const values = measure.res ? Object.values(measure.res)[0] : null;
-    const stamp = measure.res ? Object.keys(measure.res)[0] : null;
-    if (!values) continue;
-    if (stamp) time = new Date(Number(stamp) * 1000).toISOString();
+    const entries = Object.entries(measure.res || {})
+      .map(([stamp, values]) => ({ stamp: Number(stamp), values }))
+      .filter(({ stamp, values }) => Number.isFinite(stamp) && Array.isArray(values))
+      .sort((a, b) => b.stamp - a.stamp);
+    const latest = entries[0];
+    if (!latest) continue;
+    if (latest.stamp > latestStamp) {
+      latestStamp = latest.stamp;
+      time = new Date(latest.stamp * 1000).toISOString();
+    }
     type.forEach((key, index) => {
-      const value = num(values[index]);
+      const value = num(latest.values[index]);
       if (key === 'temperature') temperature = value;
       if (key === 'humidity') humidity = value;
       if (key === 'pressure') pressure = value;

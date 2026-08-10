@@ -27,6 +27,8 @@ const emptyConsensus = () => ({
   aladin: null,
   yr: null,
   forecastSeries: [],
+  currentRain: null,
+  precipitationGroups: null,
 })
 
 function withClientMeta(payload, response) {
@@ -105,7 +107,7 @@ export function useHomeBundle(location) {
       })
 
     return () => controller.abort()
-  }, [location?.lat, location?.lon])
+  }, [location])
 
   const refresh = useCallback(async () => {
     const current = locationRef.current
@@ -123,6 +125,7 @@ export function useHomeBundle(location) {
 
   const consensus = bundle?.consensus || emptyConsensus()
   const clientMeta = bundle?.clientMeta ?? null
+  const currentRain = consensus?.currentRain ?? null
 
   return {
     loading,
@@ -134,8 +137,9 @@ export function useHomeBundle(location) {
     warningsAttribution: bundle?.warningsAttribution ?? null,
     aqi: bundle?.aqi ?? null,
     consensus: {
-      ...consensus,
-      loading,
+       ...consensus,
+       currentRain,
+       loading,
       error,
     },
     updatedAt: bundle?.updatedAt ?? null,

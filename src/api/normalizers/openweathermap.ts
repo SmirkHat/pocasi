@@ -10,12 +10,21 @@ function numberValue(value) {
   return Number.isFinite(number) ? number : null;
 }
 
-function precipMm(obj) {
+function precipitationValue(obj) {
   if (!obj) return null;
-  const rain = numberValue(obj.rain?.['1h'] ?? obj.rain?.['3h']);
-  const snow = numberValue(obj.snow?.['1h'] ?? obj.snow?.['3h']);
-  if (rain == null && snow == null) return null;
-  return (rain || 0) + (snow || 0);
+  if (obj.rain?.['1h'] != null || obj.snow?.['1h'] != null) {
+    const rain = numberValue(obj.rain?.['1h']);
+    const snow = numberValue(obj.snow?.['1h']);
+    if (rain == null && snow == null) return null;
+    return { value: (rain || 0) + (snow || 0), intervalMinutes: 60 };
+  }
+  if (obj.rain?.['3h'] != null || obj.snow?.['3h'] != null) {
+    const rain = numberValue(obj.rain?.['3h']);
+    const snow = numberValue(obj.snow?.['3h']);
+    if (rain == null && snow == null) return null;
+    return { value: (rain || 0) + (snow || 0), intervalMinutes: 180 };
+  }
+  return null;
 }
 
 /**
@@ -36,13 +45,17 @@ export function normalizeOpenWeatherMap(data) {
     numberValue(forecast0?.pop) ??
     numberValue(data?.onecall?.daily?.[0]?.pop);
   const precipitationProbability = popRaw == null ? null : popRaw <= 1 ? popRaw * 100 : popRaw;
+  const precipitation = precipitationValue(current) ?? precipitationValue(onecallCurrent) ?? precipitationValue(onecallHourly0);
+  const observedAt = current.dt ?? onecallCurrent?.dt;
 
   return {
     id: 'openweathermap',
     temperature,
     apparentTemperature:
       numberValue(current.main?.feels_like) ?? numberValue(onecallCurrent?.feels_like),
-    precipitation: precipMm(current) ?? precipMm(onecallCurrent) ?? precipMm(onecallHourly0) ?? 0,
+    precipitation: precipitation?.value ?? null,
+    precipitationIntervalMinutes: precipitation?.intervalMinutes ?? null,
+    observedAt: observedAt ? new Date(observedAt * 1000).toISOString() : null,
     precipitationProbability,
     dewPoint:
       numberValue(onecallCurrent?.dew_point) ?? calculateDewPoint(temperature, humidity),

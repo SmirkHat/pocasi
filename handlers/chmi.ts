@@ -4,7 +4,35 @@ const DATA_BASE = 'https://opendata.chmi.cz/meteorology/climate/now/data/';
 let metaCache = null;
 let metaCacheAt = 0;
 const META_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const MAX_STATION_ATTEMPTS = 12;
+const MAX_STATION_ATTEMPTS = 20;
+const MAX_STATION_DISTANCE_KM = 80;
+const MAX_MEASUREMENT_AGE_MS = 6 * 60 * 60 * 1000;
+
+function timestampMs(value) {
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function latestMeasurement(values) {
+  const measurements = measurementsFromValues(values);
+  const latestTime = Object.keys(measurements).sort().reverse()[0];
+  return latestTime ? measurements[latestTime] : null;
+}
+
+function measurementIsFresh(measurement) {
+  const ms = timestampMs(measurement?.dt);
+  return ms !== null && Math.abs(Date.now() - ms) <= MAX_MEASUREMENT_AGE_MS;
+}
+
+function measurementsFromValues(values) {
+  const measurements = {};
+  values.forEach(v => {
+    const [, element, dt, val] = v;
+    if (!measurements[dt]) measurements[dt] = { dt };
+    measurements[dt][element] = val;
+  });
+  return measurements;
+}
 
 function distanceKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -75,17 +103,6 @@ async function fetchStationData(station, day) {
   return values;
 }
 
-function measurementsFromValues(values) {
-  const measurements = {};
-  values.forEach(v => {
-    const [, element, dt, val] = v;
-    if (!measurements[dt]) measurements[dt] = { dt };
-    measurements[dt][element] = val;
-  });
-
-  return measurements;
-}
-
 export default async function handler(req, res) {
   const { lat, lon } = req.query;
 
@@ -103,32 +120,33 @@ export default async function handler(req, res) {
 
     const nearestStations = stations
       .map(s => ({ ...s, dist: distanceKm(userLat, userLon, s.lat, s.lon) }))
+      .filter(s => s.dist <= MAX_STATION_DISTANCE_KM)
       .sort((a, b) => a.dist - b.dist)
       .slice(0, MAX_STATION_ATTEMPTS);
 
     let nearest = null;
     let values = [];
+    let latest = null;
 
     for (const day of [dayStamp(), dayStamp(1)]) {
       for (const station of nearestStations) {
         const stationValues = await fetchStationData(station, day);
         if (!stationValues) continue;
+        const candidate = latestMeasurement(stationValues);
+        if (!measurementIsFresh(candidate)) continue;
 
         nearest = station;
         values = stationValues;
+        latest = candidate;
         break;
       }
-
       if (nearest) break;
     }
 
-    if (!nearest) throw new Error(`Data nejsou dostupná pro ${nearestStations.length} nejbližších stanic.`);
+    if (!nearest || !latest) throw new Error(`Nejsou dostupná čerstvá data pro stanice do ${MAX_STATION_DISTANCE_KM} km.`);
 
     const measurements = measurementsFromValues(values);
-
     const sortedTimes = Object.keys(measurements).sort().reverse();
-    const latest = measurements[sortedTimes[0]];
-    if (!latest) throw new Error(`Stanice ${nearest.name} nemá použitelná měření.`);
 
     const result = {
       station: {
